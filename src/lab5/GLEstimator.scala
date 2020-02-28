@@ -7,11 +7,11 @@ object GLEstimator extends App {
     Math.pow(-1.0, n) / ((2.0 * n) + 1.0)
   }
 
+  val start = System.nanoTime()
+
   def SummationGL(n: Int): Double = {
     (0 to n).foldLeft(0.0){(a,b) => (a + IterationGL(b))}
   }
-
-  val start = System.nanoTime()
 
   val quarter_pi = SummationGL(n)
   val pi = quarter_pi * 4.0
