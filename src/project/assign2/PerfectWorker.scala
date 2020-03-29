@@ -74,10 +74,9 @@ class PerfectWorker(port: Int) extends Worker(port) {
           val partition : Partition = task.payload.asInstanceOf[Partition];
           val NUM_PARTITIONS = (partition.getRange() / RANGE).asInstanceOf[Int]
 
-
           val ranges = for(k <- 0 to NUM_PARTITIONS) yield {
-             val lower: Long = k * RANGE + 1
-             val upper: Long = partition.getRange() min (k + 1) * RANGE
+             val lower: Long = partition.start + (k * RANGE)
+             val upper: Long = partition.start + ((k + 1) * RANGE) - 1
 
             (lower, upper)
           }
@@ -89,11 +88,16 @@ class PerfectWorker(port: Int) extends Worker(port) {
             sum
           }
 
-          val pi = partials.foldLeft(4.0){(a,b) => a + b}
+          val pi = partials.foldLeft(0.0){(a,b) => a + b}
           val end = System.nanoTime()
 
           val result = Result(pi, start, end)
           // Send a simple reply to test the connectivity.
+
+          LOG.info(name)
+          LOG.info(partition)
+          LOG.info(result)
+
           sender ! result
       }
     }

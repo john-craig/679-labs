@@ -58,8 +58,10 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
       workers(k) ! partitions(k)
     }
 
+    val results = List() : List[Result]
+    var pi = 4.0
 
-    while (true)
+    while (results.size < 2) {
     // This while loop wait forever but we really just need to wait
     // for two replies, one from each worker. The result, that is,
     // the partial sum and the elapsed times are in the payload as
@@ -68,7 +70,13 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
         case task: Task if task.kind == Task.REPLY =>
           LOG.info("received reply " + task)
 
+          val result = task.payload.asInstanceOf[Result]
 
+          pi += result.sum
+          LOG.info(pi)
+
+          results :+ result
       }
+    }
   }
 }
