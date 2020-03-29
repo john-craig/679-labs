@@ -62,7 +62,7 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
 
     var results = 0
     var pi = 4.0
-    var tn_workers = 0
+    var tn_workers = 0.0
 
     while (results < 2) {
     // This while loop wait forever but we really just need to wait

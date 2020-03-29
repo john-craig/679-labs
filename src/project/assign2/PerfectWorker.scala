@@ -50,6 +50,7 @@ class PerfectWorker(port: Int) extends Worker(port) {
 
     val RANGE = 1000000
 
+    val start = System.nanoTime()
 
     def IterationGL(n: Double) = {
       Math.pow(-1.0, n) / ((2.0 * n) + 1.0)
@@ -69,7 +70,6 @@ class PerfectWorker(port: Int) extends Worker(port) {
         // with the partial sum and the time elapsed time.
         case task: Task =>
           LOG.info("got task, sending reply")
-          val start = System.nanoTime()
 
           val partition : Partition = task.payload.asInstanceOf[Partition];
           val NUM_PARTITIONS = (partition.getRange() / RANGE).asInstanceOf[Int]
