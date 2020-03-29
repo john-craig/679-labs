@@ -53,15 +53,18 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
       Partition(lower, upper, CANDIDATE)
     }
 
+    val t0 = System.nanoTime()
+
     (0 until sockets.length).foreach { k =>
       LOG.info("sending partition info to worker " + k)
       workers(k) ! partitions(k)
     }
 
-    val results = List() : List[Result]
+    var results = 0
     var pi = 4.0
+    var tn_workers = 0
 
-    while (results.size < 2) {
+    while (results < 2) {
     // This while loop wait forever but we really just need to wait
     // for two replies, one from each worker. The result, that is,
     // the partial sum and the elapsed times are in the payload as
@@ -73,10 +76,21 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
           val result = task.payload.asInstanceOf[Result]
 
           pi += result.sum
-          LOG.info(pi)
+          //LOG.info(pi)
 
-          results :+ result
+          tn_workers += (result.t1 - result.t0)
+          //LOG.info(tn_workers)
+
+          results += 1
       }
     }
+
+    val t1 = System.nanoTime()
+    val tn_dispatcher = (t1 - t0)
+
+    LOG.info(pi)
+    LOG.info("tn_workers: " + tn_workers)
+    LOG.info("tn_dispatcher: " + tn_dispatcher)
+
   }
 }
