@@ -5,6 +5,8 @@ import parascale.actor.last.{Dispatcher, Task}
 import parascale.util._
 import project.assign2.Partition
 import project.assign2.Result
+
+import scala.collection.mutable.ListBuffer
 /**
  * Spawns a dispatcher to connect to multiple workers.
  */
@@ -35,62 +37,124 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
   def act: Unit = {
     LOG.info("sockets to workers = "+sockets)
 
-    /*(0 until sockets.length).foreach { k =>
+    (0 until sockets.length).foreach { k =>
       LOG.info("sending message to worker " + k)
       workers(k) ! "to worker(" + k + ") hello from dispatcher"
-    }*/
+    }
 
     // TODO: Replace the code below to implement PNF
     // Create the partition info and put it in two separate messages,
     // one for each worker, then wait below for two replies, one from
     // each worker
-    val CANDIDATE = Int.MaxValue / sockets.length
 
-    val partitions = for(k <- 0 to sockets.length) yield {
-      val lower: Int = k * CANDIDATE + 1
-      val upper: Int = Int.MaxValue min (k + 1) * CANDIDATE
+    var t0 = System.nanoTime()
 
-      Partition(lower, upper, CANDIDATE)
+    val candidates = IndexedSeq(
+      6L,
+      28L,
+      496L,
+      8128L,
+      33550336L,
+      33550337L,
+      85899869057L,
+      85899869056L,
+      137438691328L
+    )
+
+    //Helper function which determines all the partitions to be
+    //sent to the workers based on only the current candidate
+    def repartition(candidate: Long): IndexedSeq[Partition] = {
+      val partitions = for(k <- 0 to sockets.length) yield {
+        val range = candidate / sockets.length
+
+        val lower: Long = k * range + 1
+        val upper: Long = candidate min (k + 1) * range
+
+        Partition(lower, upper, candidate)
+      }
+
+      (partitions)
     }
 
-    val t0 = System.nanoTime()
-
-    (0 until sockets.length).foreach { k =>
-      LOG.info("sending partition info to worker " + k)
-      workers(k) ! partitions(k)
-    }
-
-    var results = 0
-    var pi = 4.0
-    var tn_workers = 0.0
-
-    while (results < 2) {
-    // This while loop wait forever but we really just need to wait
-    // for two replies, one from each worker. The result, that is,
-    // the partial sum and the elapsed times are in the payload as
-    // a Result class.
-      receive match {
-        case task: Task if task.kind == Task.REPLY =>
-          LOG.info("received reply " + task)
-
-          val result = task.payload.asInstanceOf[Result]
-
-          pi += result.sum
-          //LOG.info(pi)
-
-          tn_workers += (result.t1 - result.t0)
-          //LOG.info(tn_workers)
-
-          results += 1
+    //Helper function to actually send partitions to the workers
+    def sendPartitions(partitions: IndexedSeq[Partition]): Unit =
+    {
+      (0 until sockets.length).foreach { k =>
+        LOG.info("sending partition info to worker " + k)
+        workers(k) ! partitions(k)
       }
     }
 
-    val t1 = System.nanoTime()
-    val tn_dispatcher = (t1 - t0)
+    //Helper function to print the report
+    def printReport(candidate: Long, result: Boolean, t1: Long, tn: Long, numCores: Int): Unit = {
+      val r = t1 / tn
+      val e = r / numCores
 
-    LOG.info(pi)
-    LOG.info("tn_workers: " + tn_workers)
-    LOG.info("tn_dispatcher: " + tn_dispatcher)
+      LOG.info(candidate + "      " + result + "      " + t1  + "      " + tn  + "      " + r  + "      " + e)
+    }
+
+    var state = 0
+    var results = new ListBuffer[Result]
+    var cur_candidate = 0
+
+    for (k <- 0 until candidates.size){
+      val partition = repartition(candidates(k))
+      sendPartitions(partition)
+    }
+
+    while (true) {
+      //Sends the partitions of the current candidate to the workers
+      //then changes state so that it doesn't repeatedly send them over
+      //and over; also increments the current candidate
+
+      if(results.size == 2) {
+        val total = results.foldLeft(0L){(sum, result) =>
+          val total = sum + result.sum
+
+          total
+        }
+
+        val tn = results.foldLeft(0L){(time, result) =>
+          val tn = time + (result.t1 - result.t0)
+
+          tn
+        }
+
+        val n = results.foldLeft(0){(numCores, result) =>
+          val n = numCores + result.numCores
+
+          n
+        }
+
+        val t1 = System.nanoTime()
+
+        LOG.info(total)
+
+        val isPerfect = (total == candidates(cur_candidate))
+
+        printReport(candidates(cur_candidate), isPerfect, tn, t1, n)
+
+        state = 0
+        cur_candidate += 1
+        results = new ListBuffer[Result]
+      }
+
+      receive match {
+        case task: Task if task.kind == Task.REPLY =>
+          val payload = task.payload
+
+          payload match{
+            case payload: String => {
+              LOG.info(payload)
+            }
+            case payload: Result => {
+              val result = payload.asInstanceOf[Result]
+
+              results += result
+            }
+          }
+      }
+    }
 
   }
 }
