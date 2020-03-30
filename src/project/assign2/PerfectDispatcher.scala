@@ -18,7 +18,7 @@ object PerfectDispatcher extends App {
   // When deploying on multiple hosts, use the VM argument,
   // -Dsocket=<ip address>:9000 which points to the second
   // host.
-  val socket2 = getPropertyOrElse("socket","localhost:9000")
+  val socket2 = getPropertyOrElse("socket","192.168.3.117:9000")
 
   // Construction forks a thread which automatically runs the actor act method.
   new PerfectDispatcher(List("localhost:8000", socket2))
