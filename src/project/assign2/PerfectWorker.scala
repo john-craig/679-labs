@@ -76,7 +76,7 @@ class PerfectWorker(port: Int) extends Worker(port) {
 
           val ranges = for(k <- 0 to NUM_PARTITIONS) yield {
              val lower: Long = partition.start + (k * RANGE)
-             val upper: Long = partition.start + ((k + 1) * RANGE) - 1
+             val upper: Long = partition.end min (partition.start + ((k + 1) * RANGE) - 1)
 
             (lower, upper)
           }
