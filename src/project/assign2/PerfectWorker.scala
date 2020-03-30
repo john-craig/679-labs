@@ -136,7 +136,7 @@ class PerfectWorker(port: Int) extends Worker(port) {
               sum = futures.foldLeft (0L) {
                 (sum, future) =>
                 import scala.concurrent.duration._
-                val next_sum = Await.result (future, 500 seconds)
+                val next_sum = Await.result (future, 1000 seconds)
 
                 sum + next_sum
                 }
