@@ -144,7 +144,7 @@ class PerfectWorker(port: Int) extends Worker(port) {
 
               val end = System.nanoTime ()
 
-              val result = Result (sum, start, end, NUM_CORES)
+              val result = Result (sum, start, end, candidate, NUM_CORES)
 
               sender ! result
             }

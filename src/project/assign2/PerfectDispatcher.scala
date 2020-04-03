@@ -18,7 +18,7 @@ object PerfectDispatcher extends App {
   // When deploying on multiple hosts, use the VM argument,
   // -Dsocket=<ip address>:9000 which points to the second
   // host.
-  val socket2 = getPropertyOrElse("socket","192.168.3.117:9000")
+  val socket2 = getPropertyOrElse("socket","localhost:8000")
 
   // Construction forks a thread which automatically runs the actor act method.
   new PerfectDispatcher(List("localhost:8000", socket2))
@@ -60,6 +60,8 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
       85899869056L,
       137438691328L
     )
+    var results = new ListBuffer[Result]
+    var cur_candidate = 0
 
     //Helper function which determines all the partitions to be
     //sent to the workers based on only the current candidate
@@ -80,22 +82,53 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
     def sendPartitions(partitions: IndexedSeq[Partition]): Unit =
     {
       (0 until sockets.length).foreach { k =>
-        LOG.info("sending partition info to worker " + k)
+        //LOG.info("sending partition info to worker " + k)
         workers(k) ! partitions(k)
       }
     }
 
+    def checkResults(r : ListBuffer[Result]): Unit ={
+      if(r.size == 2){
+        handleResults(IndexedSeq(r(0), r(1)))
+        results = new ListBuffer[Result]
+      }
+    }
+
+    def handleResults(results: IndexedSeq[Result]): Unit = {
+      val total = results.foldLeft(0L){(sum, result) =>
+        val total = sum + result.sum
+
+        total
+      }
+
+      val tn = results.foldLeft(0L){(time, result) =>
+        val tn = time + (result.t1 - result.t0)
+
+        tn
+      }
+
+      val n = results.foldLeft(0){(numCores, result) =>
+        val n = numCores + result.numCores
+
+        n
+      }
+
+      val t1 = System.nanoTime()
+
+      LOG.info(total)
+
+      val isPerfect = (total == results(0).candidate)
+
+      printReport(results(0).candidate, isPerfect, tn, t1, n)
+    }
+
     //Helper function to print the report
     def printReport(candidate: Long, result: Boolean, t1: Long, tn: Long, numCores: Int): Unit = {
-      val r = t1 / tn
-      val e = r / numCores
+      val r = (t1 / tn).asInstanceOf[Double]
+      val e = (r / numCores).asInstanceOf[Double]
 
       LOG.info(candidate + "      " + result + "      " + t1  + "      " + tn  + "      " + r  + "      " + e)
     }
-
-    var state = 0
-    var results = new ListBuffer[Result]
-    var cur_candidate = 0
 
     for (k <- 0 until candidates.size){
       val partition = repartition(candidates(k))
@@ -107,37 +140,6 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
       //then changes state so that it doesn't repeatedly send them over
       //and over; also increments the current candidate
 
-      if(results.size == 2) {
-        val total = results.foldLeft(0L){(sum, result) =>
-          val total = sum + result.sum
-
-          total
-        }
-
-        val tn = results.foldLeft(0L){(time, result) =>
-          val tn = time + (result.t1 - result.t0)
-
-          tn
-        }
-
-        val n = results.foldLeft(0){(numCores, result) =>
-          val n = numCores + result.numCores
-
-          n
-        }
-
-        val t1 = System.nanoTime()
-
-        LOG.info(total)
-
-        val isPerfect = (total == candidates(cur_candidate))
-
-        printReport(candidates(cur_candidate), isPerfect, tn, t1, n)
-
-        state = 0
-        cur_candidate += 1
-        results = new ListBuffer[Result]
-      }
 
       receive match {
         case task: Task if task.kind == Task.REPLY =>
@@ -151,6 +153,8 @@ class PerfectDispatcher(sockets: List[String]) extends Dispatcher(sockets) {
               val result = payload.asInstanceOf[Result]
 
               results += result
+
+              checkResults(results)
             }
           }
       }
