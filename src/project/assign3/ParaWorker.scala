@@ -1,16 +1,17 @@
 package project.assign3
 
+import assign2.PerfectDispatcher.getClass
 import org.apache.log4j.Logger
 import parascale.actor.last.{Task, Worker}
 import parascale.util._
-import project.assign2.Partition
-import project.assign2.Result
+import parabond.cluster._
 
 import scala.concurrent._
 import ExecutionContext.Implicits.global
 
 
 object ParaWorker extends App {
+  val LOG = Logger.getLogger(getClass)
   //a. If worker running on a single host, spawn two workers
   // else spawn one worker.
   val nhosts = getPropertyOrElse("nhosts", 1)
@@ -27,8 +28,8 @@ object ParaWorker extends App {
   // If there is 1 host, then ports include 9000 by default
   // Otherwise, if there are two hosts in this configuration,
   // use just one port which must be specified by VM options
-  val ports =
-  if (nhosts == 1) List(port1, 9000) else List(port1)
+  val ports = if (nhosts == 1) List(port1, 9000) else List(port1)
+
   // will contain one port per host.
   for (port <- ports) {
     // Start up new worker.
@@ -40,6 +41,41 @@ class ParaWorker(port: Int) extends Worker(port) {
   import ParaWorker._
 
   def act: Unit = {
+    val name = getClass.getSimpleName
+    LOG.info("started " + name + " (id=" + id + ")")
 
+    def handlePartition(partition: Partition): Unit = {
+      //Do calculations
+
+      LOG.info("FAS " + port)
+
+      //Send result
+      sendResult()
+    }
+
+    def sendResult(sum: Long=0, t0: Long=0, t1: Long=0): Unit ={
+      sender ! Result(sum, t0, t1, port)
+    }
+
+    while (true) {
+      receive match {
+        // TODO: Replace the code below to implement PNF
+        // It gets the partition range info from the task payload then
+        // spawns futures (or uses parallel collections) to analyze the
+        // partition in parallel. Finally, when done, it replies
+        // with the partial sum and the time elapsed time.
+        case task: Task =>
+          val payload = task.payload
+
+          payload match {
+            case payload: String => {
+              sender ! "connection established!"
+            }
+            case payload: Partition => {
+              handlePartition(payload.asInstanceOf[Partition])
+            }
+          }
+      }
+    }
   }
 }
