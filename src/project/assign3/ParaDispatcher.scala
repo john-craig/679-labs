@@ -95,9 +95,9 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
 
               //Do whatever gubbins and shit needs done
               //when the results arrive
+              LOG.info("received result " + result)
 
               //Send the next partition to the worker that just
-              //sent a result
               sendNextPartition(result.workerPort)
             }
           }

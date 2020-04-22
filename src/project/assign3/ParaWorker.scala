@@ -46,15 +46,14 @@ class ParaWorker(port: Int) extends Worker(port) {
 
     def handlePartition(partition: Partition): Unit = {
       //Do calculations
-
-      LOG.info("FAS " + port)
+      val analysis: Analysis = node.analyze(partition)
 
       //Send result
-      sendResult()
+      sendResult(analysis)
     }
 
-    def sendResult(sum: Long=0, t0: Long=0, t1: Long=0): Unit ={
-      sender ! Result(sum, t0, t1, port)
+    def sendResult(analysis: Analysis, t0: Long=0, t1: Long=0): Unit ={
+      sender ! Result(analysis, t0, t1, port)
     }
 
     while (true) {
@@ -72,6 +71,7 @@ class ParaWorker(port: Int) extends Worker(port) {
               sender ! "connection established!"
             }
             case payload: Partition => {
+              LOG.info("received partition " + Partition)
               handlePartition(payload.asInstanceOf[Partition])
             }
           }
