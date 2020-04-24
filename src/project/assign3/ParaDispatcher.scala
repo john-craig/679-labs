@@ -29,7 +29,7 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
     //Define variables and constants
     val ladder = List(
       1000,
-//      2000,
+      2000,
 //      4000,
 //      8000,
 //      16000,
@@ -57,18 +57,13 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
     val partitionIterators = List(alphaList.iterator, bravoList.iterator)
 
     //Output variables
-    var totalRuntime = 0L
-    var missedPortfIds = ListBuffer[List[Int]]()
+    var startTimes = ListBuffer[Long]()
+
+    var runTimes = ListBuffer[Long](0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L )
+    var missedPortfIds = ListBuffer[Int](0, 0, 0, 0, 0, 0, 0, 0 , 0)
 
     //Declare helper methods
     def handleResults(result: Result): Unit = {
-      //Add the partial runtime to the total runtime
-      totalRuntime += result.delta_t
-
-      val missed = check(result.portfIds)
-      LOG.info("missed portfolios: " + missed)
-      missedPortfIds += missed
-
       //Determine the worker the result came from
       var worker = -1
 
@@ -79,27 +74,29 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
         }
       })
 
-      rungCounters = rungCounters.updated(worker, rungCounters(worker) + 1)
-
-      //Check the next rung, if available
-      /*if(rungCounters(0) > rungCounters(2) & rungCounters(1) > rungCounters(2)){
-        var portfIds = List[Int]()
-
-        if(rungCounters(2) == 0){
-          portfIds = (0 until ladder(rungCounters(2))).toList
-        } else {
-          portfIds = (ladder(rungCounters(2) - 1) until ladder(rungCounters(2))).toList
-        }
-
-        val missed = check(portfIds)
-        LOG.info("missed portfolios: " + missed)
-        missedPortfIds += missed
-
-        rungCounters = rungCounters.updated(2, rungCounters(2) + 1)
-      }*/
-
       //Send the next partition to the worker that just gave its result
       sendNextPartition(worker)
+
+      //Add the partial runtime to the runtime for the worker's rung
+      runTimes = runTimes.updated(rungCounters(worker), runTimes(rungCounters(worker)) + result.delta_t)
+
+      //Check for missed IDs *after* sending the next partition
+      val missed = check(result.portfIds)
+      LOG.info("missed portfolios: " + missed)
+      missedPortfIds = missedPortfIds.updated(rungCounters(worker), missedPortfIds(rungCounters(worker)) + missed.length)
+
+      //Update the rungcounter
+      rungCounters = rungCounters.updated(worker, rungCounters(worker) + 1)
+
+      if(rungCounters(0) > rungCounters(2) & rungCounters(1) > rungCounters(2)){
+        rungCounters = rungCounters.updated(2, rungCounters(2) + 1)
+
+        if(rungCounters(2) == ladder.length){
+          generateReport()
+        } else {
+          startTimes += System.nanoTime()
+        }
+      }
     }
 
     def sendNextPartition(worker: Int= -1): Unit ={
@@ -117,7 +114,23 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
       }
     }
 
+    def generateReport(): Unit = {
+      var report: String = ""
+
+      report += "\nN\tmissed\tT1\t\t\tTN\t\tR\te"
+
+      (0 until ladder.length).foreach(k => {
+        val t1 = startTimes(k) seconds
+        val tn = runTimes(k) seconds
+
+        report += "\n" + ladder(k).toString + "\t" + missedPortfIds(k).toString + "\t" + t1.toString + "\t" + tn.toString
+      })
+
+      LOG.info(report)
+    }
+
     sendNextPartition()
+    startTimes += System.nanoTime()
 
     while (true) {
       receive match {
