@@ -4,6 +4,7 @@ import org.apache.log4j.Logger
 import parascale.actor.last.{Dispatcher, Task, Worker}
 import parascale.util._
 import parabond.cluster._
+import parascale.parabond.casa.MongoHelper
 
 import scala.concurrent._
 import ExecutionContext.Implicits.global
@@ -57,6 +58,7 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
     val partitionIterators = List(alphaList.iterator, bravoList.iterator)
 
     //Output variables
+    var numCores = 0
     var startTimes = ListBuffer[Long]()
 
     var runTimes = ListBuffer[Long](0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L )
@@ -117,13 +119,22 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
     def generateReport(): Unit = {
       var report: String = ""
 
-      report += "\nN\tmissed\tT1\t\t\tTN\t\tR\te"
+      report += "Parabond Analysis"
+      report += "\nby John Craig"
+      report += "\nApril 24, 2020"
+      report += "\nBasicNode"
+      report += "\nWorkers: " + workers.length.toString
+      report += "\nHosts: localhost (dispatcher) " + sockets(0) + " (worker 1) " + sockets(1) + " (worker 2) " + MongoHelper.getHost + " (mongo)"
+      report += "\nCores: " + numCores
+      report += "\nN\tmissed\tT1\t\t\t\tTN\t\t\t\tR\t\t\t\t\t\te"
 
       (0 until ladder.length).foreach(k => {
         val t1 = startTimes(k) seconds
         val tn = runTimes(k) seconds
+        val r = (t1 / tn)
+        val e = (r / numCores)
 
-        report += "\n" + ladder(k).toString + "\t" + missedPortfIds(k).toString + "\t" + t1.toString + "\t" + tn.toString
+        report += "\n" + ladder(k).toString + "\t" + missedPortfIds(k).toString + "\t" + t1.toString + "\t" + tn.toString + "\t" + r.toString + "\t" + e.toString
       })
 
       LOG.info(report)
@@ -142,6 +153,9 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
           payload match{
             case payload: String => {
               LOG.info(payload)
+            }
+            case payload: Int => {
+              numCores += payload.asInstanceOf[Int]
             }
             case payload: Result => {
               val result = payload.asInstanceOf[Result]

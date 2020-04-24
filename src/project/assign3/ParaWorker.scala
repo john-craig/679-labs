@@ -79,6 +79,7 @@ class ParaWorker(port: Int) extends Worker(port) {
           payload match {
             case payload: String => {
               sender ! "connection established!"
+              sender ! Runtime.getRuntime.availableProcessors()
             }
             case payload: Partition => {
               LOG.info("received partition " + Partition)
