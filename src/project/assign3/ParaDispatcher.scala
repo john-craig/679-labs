@@ -65,6 +65,10 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
       //Add the partial runtime to the total runtime
       totalRuntime += result.delta_t
 
+      val missed = check(result.portfIds)
+      LOG.info("missed portfolios: " + missed)
+      missedPortfIds += missed
+
       //Determine the worker the result came from
       var worker = -1
 
@@ -78,7 +82,7 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
       rungCounters = rungCounters.updated(worker, rungCounters(worker) + 1)
 
       //Check the next rung, if available
-      if(rungCounters(0) > rungCounters(2) & rungCounters(1) > rungCounters(2)){
+      /*if(rungCounters(0) > rungCounters(2) & rungCounters(1) > rungCounters(2)){
         var portfIds = List[Int]()
 
         if(rungCounters(2) == 0){
@@ -92,7 +96,7 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
         missedPortfIds += missed
 
         rungCounters = rungCounters.updated(2, rungCounters(2) + 1)
-      }
+      }*/
 
       //Send the next partition to the worker that just gave its result
       sendNextPartition(worker)

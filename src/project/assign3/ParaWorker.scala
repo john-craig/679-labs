@@ -8,6 +8,7 @@ import parabond.cluster._
 
 import scala.concurrent._
 import ExecutionContext.Implicits.global
+import scala.collection.mutable.ListBuffer
 
 
 object ParaWorker extends App {
@@ -49,18 +50,20 @@ class ParaWorker(port: Int) extends Worker(port) {
       val analysis = node analyze(partition)
 
       var delta_t = 0L
+      var portfIds = ListBuffer[Int]()
 
       analysis.results.foreach(job => {
           delta_t += (job.result.t1 - job.result.t0)
+          portfIds += job.portfId
         }
       )
 
       //Send result
-      sendResult(delta_t)
+      sendResult(delta_t, portfIds.toList)
     }
 
-    def sendResult(delta_t: Long): Unit ={
-      sender ! Result(delta_t, port)
+    def sendResult(delta_t: Long, ids: List[Int]): Unit ={
+      sender ! Result(delta_t, port, ids)
     }
 
     while (true) {
