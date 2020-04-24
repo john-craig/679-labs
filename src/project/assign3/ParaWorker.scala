@@ -46,14 +46,21 @@ class ParaWorker(port: Int) extends Worker(port) {
 
     def handlePartition(partition: Partition): Unit = {
       //Do calculations
-      val analysis: Analysis = node.analyze(partition)
+      val analysis = node analyze(partition)
+
+      var delta_t = 0L
+
+      analysis.results.foreach(job => {
+          delta_t += (job.result.t1 - job.result.t0)
+        }
+      )
 
       //Send result
-      sendResult(analysis)
+      sendResult(delta_t)
     }
 
-    def sendResult(analysis: Analysis, t0: Long=0, t1: Long=0): Unit ={
-      sender ! Result(analysis, t0, t1, port)
+    def sendResult(delta_t: Long): Unit ={
+      sender ! Result(delta_t, port)
     }
 
     while (true) {

@@ -26,10 +26,10 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
       workers(k) ! "to worker(" + k + ") hello from dispatcher"
     }
 
-    //Define the ladder
+    //Define variables and constants
     val ladder = List(
       1000,
-      2000
+//      2000,
 //      4000,
 //      8000,
 //      16000,
@@ -38,11 +38,15 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
 //      100000
     )
 
+    var rungCounters = IndexedSeq(0, 0, 0)
+
     var alphaList = ListBuffer[Partition]()
     var bravoList = ListBuffer[Partition]()
 
     //Seperate the ladder into its partitions
     ladder.foreach(rung => {
+      checkReset(rung, 0)
+
       val a = Partition(rung / 2, 0)
       val b = Partition(rung / 2, rung / 2)
 
@@ -50,35 +54,68 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
       bravoList += b
     })
 
-    //val alphaIterator = alphaList.iterator
-    //val bravoIterator = bravoList.iterator
-    var partitionIterators = List(alphaList.iterator, bravoList.iterator)
+    val partitionIterators = List(alphaList.iterator, bravoList.iterator)
 
-    def sendNextPartition(port: Int= -1): Unit ={
+    //Output variables
+    var totalRuntime = 0L
+    var missedPortfIds = ListBuffer[List[Int]]()
+
+    //Declare helper methods
+    def handleResults(result: Result): Unit = {
+      //Add the partial runtime to the total runtime
+      totalRuntime += result.delta_t
+
+      //Determine the worker the result came from
+      var worker = -1
+
+      //Match the port
+      (0 until workers.length).foreach(k => {
+        if(sockets(k).contains(result.workerPort.toString)){
+          worker = k
+        }
+      })
+
+      rungCounters = rungCounters.updated(worker, rungCounters(worker) + 1)
+
+      //Check the next rung, if available
+      if(rungCounters(0) > rungCounters(2) & rungCounters(1) > rungCounters(2)){
+        var portfIds = List[Int]()
+
+        if(rungCounters(2) == 0){
+          portfIds = (0 until ladder(rungCounters(2))).toList
+        } else {
+          portfIds = (ladder(rungCounters(2) - 1) until ladder(rungCounters(2))).toList
+        }
+
+        val missed = check(portfIds)
+        LOG.info("missed portfolios: " + missed)
+        missedPortfIds += missed
+
+        rungCounters = rungCounters.updated(2, rungCounters(2) + 1)
+      }
+
+      //Send the next partition to the worker that just gave its result
+      sendNextPartition(worker)
+    }
+
+    def sendNextPartition(worker: Int= -1): Unit ={
       //Match the port number to the worker, and send
       //that worker its next partitions
-      if(port == -1){
+      if(worker == -1){
         //By default just send the next partition for both
         (0 until workers.length).foreach(k =>{
           workers(k) ! partitionIterators(k).next()
         })
       } else {
-        //Match the port
-        (0 until workers.length).foreach(k => {
-          if(port.toString == sockets(k)){
-            if(partitionIterators(k).hasNext){
-              workers(k) ! partitionIterators(k).next()
-            }
-          }
-        })
+        if(partitionIterators(worker).hasNext) {
+          workers(worker) ! partitionIterators(worker).next()
+        }
       }
     }
 
-    while (true) {
-      //Sends the partitions of the current candidate to the workers
-      //then changes state so that it doesn't repeatedly send them over
-      //and over; also increments the current candidate
+    sendNextPartition()
 
+    while (true) {
       receive match {
         case task: Task if task.kind == Task.REPLY =>
           val payload = task.payload
@@ -88,17 +125,13 @@ class ParaDispatcher(sockets: List[String])  extends Dispatcher(sockets) {
           payload match{
             case payload: String => {
               LOG.info(payload)
-              sendNextPartition()
             }
             case payload: Result => {
               val result = payload.asInstanceOf[Result]
 
-              //Do whatever gubbins and shit needs done
-              //when the results arrive
+              //Check the results
               LOG.info("received result " + result)
-
-              //Send the next partition to the worker that just
-              sendNextPartition(result.workerPort)
+              handleResults(result)
             }
           }
 

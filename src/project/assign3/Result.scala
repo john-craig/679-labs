@@ -1,9 +1,7 @@
 package project.assign3
 import parabond.cluster.Analysis
 
-case class Result(a: Analysis, time0: Long, time1: Long, workP: Int) extends Serializable {
-  var analysis: Analysis = a
-  var t0: Long = time0
-  var t1: Long = time1
+case class Result(time_difference: Long, workP: Int) extends Serializable {
+  var delta_t: Long = time_difference
   var workerPort: Int = workP
 }
